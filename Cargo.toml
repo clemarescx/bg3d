@@ -1,0 +1,12 @@
+[workspace]
+members = ["ui", "bg3_lib"]
+resolver = "2"
+# default-members = ["ui"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Clément Marescaux <cmarescaux@hotmail.com>"]
+edition = "2021"
+
+[workspace.dependencies]
+bg3_lib = { path = "bg3_lib" }

@@ -1,0 +1,12 @@
+[package]
+name = "bg3_ui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+
+[dependencies]
+egui = { version = "0.24.1", features = ["log"] }
+eframe = "0.24.1"
+rfd = "0.12.1"
+bg3_lib.workspace = true

@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
     rc::Rc,
+    sync::Arc,
 };
 
 use crate::file_view::FileView;
@@ -27,10 +28,14 @@ impl PackageContentView {
             .files
             .into_iter()
             .map(|pfi| {
-                let file_type = match pfi.name.extension().map(|e| e.to_str()) {
-                    Some(Some("lsf")) => FileType::Lsf,
-                    Some(Some("bin")) => FileType::Bin,
-                    Some(Some("json")) => FileType::Json,
+                let file_type = match pfi.name.extension().map(|e| e.to_ascii_lowercase()) {
+                    Some(ft) => match ft.to_str() {
+                        Some("lsf") => FileType::Lsf,
+                        Some("bin") => FileType::Bin,
+                        Some("json") => FileType::Json,
+                        Some("webp") => FileType::WebP,
+                        _ => FileType::Unknown,
+                    },
                     _ => FileType::Unknown,
                 };
                 let name = pfi.name.to_string_lossy().to_string();
@@ -146,6 +151,20 @@ impl PackageContentView {
                 }
             }
 
+            FileType::WebP => {
+                let wepb_image = self.reader.decompress_file(&package_file.pfi);
+                match wepb_image {
+                    Ok(image_bytes) => {
+                        let arc: Arc<[u8]> = image_bytes.into();
+                        FileView::Image(package_file.pfi.clone(), arc)
+                    }
+                    Err(e) => FileView::ReadError {
+                        error: e.clone(),
+                        filename: package_file_idx.clone(),
+                    },
+                }
+            }
+
             FileType::Bin | FileType::Unknown => {
                 FileView::Unsupported(package_file_idx.clone(), package_file.file_type.clone())
             }
@@ -185,6 +204,7 @@ pub enum FileType {
     Lsf,
     Bin,
     Json,
+    WebP,
 }
 
 #[derive(Debug, Clone)]

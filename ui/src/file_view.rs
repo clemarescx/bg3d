@@ -2,9 +2,9 @@ use bg3_lib::{
     abstract_file_info::PackagedFileInfo,
     lsf_reader::{NodeAttributeValue, Resource},
 };
-use egui::ScrollArea;
-use std::io::prelude::*;
+use egui::{Image, ScrollArea};
 use std::{fs::File, io::BufWriter};
+use std::{io::prelude::*, sync::Arc};
 
 use crate::package_content_view::FileType;
 
@@ -15,6 +15,7 @@ pub enum FileView {
     ReadError { filename: String, error: String },
     Json(PackagedFileInfo, String),
     Lsf(PackagedFileInfo, Resource),
+    Image(PackagedFileInfo, Arc<[u8]>),
 }
 
 impl FileView {
@@ -31,6 +32,12 @@ impl FileView {
 
             FileView::Json(_, json_text) => {
                 ScrollArea::vertical().show(ui, |ui| ui.label(json_text));
+            }
+            FileView::Image(pfi, image_bytes) => {
+                let id = format!("bytes://{}", pfi.name.to_string_lossy());
+                let img = Image::from_bytes(id, Arc::clone(image_bytes));
+                ui.add(img);
+                // ui.image(img);
             }
             FileView::NoFileSelected => {
                 ui.label("no file selected");

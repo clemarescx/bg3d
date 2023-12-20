@@ -7,7 +7,7 @@ use std::{
 };
 
 use eframe::{run_native, App, NativeOptions};
-use egui::{CentralPanel, Color32, ScrollArea, SidePanel, TopBottomPanel, Ui};
+use egui::{CentralPanel, ScrollArea, SidePanel, TopBottomPanel};
 use file_view::FileView;
 use package_content_view::PackageContentView;
 
@@ -22,7 +22,8 @@ fn main() -> Result<(), eframe::Error> {
     run_native(
         "BG3d",
         options,
-        Box::new(|_cc| {
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             let app = Bg3Ui::open(path);
             Box::<Bg3Ui>::new(app)
         }),
@@ -174,27 +175,6 @@ impl App for Bg3Ui {
             }
         });
     }
-}
-
-fn add_scroll<'items_list, T: 'items_list>(ui: &mut Ui, list_name: &str, items: &'items_list [T])
-where
-    egui::RichText: std::convert::From<&'items_list T>,
-{
-    ui.vertical(|ui| {
-        let text_style = egui::TextStyle::Body;
-        let row_height = ui.text_style_height(&text_style);
-
-        let item_count = items.len();
-        let title = format!("{list_name}: {item_count}");
-        ui.colored_label(Color32::LIGHT_BLUE, title);
-
-        ScrollArea::vertical().show_rows(ui, row_height, item_count, |ui, row_range| {
-            for item in &items[row_range] {
-                ui.colored_label(Color32::LIGHT_BLUE, item);
-            }
-            ui.allocate_space(ui.available_size())
-        });
-    });
 }
 
 fn preview_files_being_dropped(ctx: &egui::Context) {

@@ -98,6 +98,7 @@ impl Bg3Ui {
             package_list.clear();
             self.package_list = None;
         }
+        self.file_view = None;
     }
 
     fn log_message(&mut self, format: String) {

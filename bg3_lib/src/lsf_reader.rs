@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::io::{prelude::*, Cursor, SeekFrom};
 
@@ -115,7 +115,7 @@ impl LSFReader {
 
     fn read_regions(&self, stream: &mut Cursor<&[u8]>) -> Result<Resource, String> {
         let mut node_instances: Vec<Node> = Vec::with_capacity(self.node_infos.len());
-        let mut regions: HashMap<String, usize> = HashMap::new();
+        let mut regions: BTreeMap<String, usize> = BTreeMap::new();
 
         for node_info in self.node_infos.iter() {
             if node_info.parent_index == -1 {
@@ -781,7 +781,7 @@ pub struct Node {
     pub name: String,
     pub parent: Option<usize>,
     pub attributes: HashMap<String, NodeAttribute>,
-    pub children: HashMap<String, Vec<usize>>,
+    pub children: BTreeMap<String, Vec<usize>>,
 }
 
 impl Node {
@@ -1110,7 +1110,7 @@ impl LSFMagic {
 #[derive(PartialEq)]
 pub struct Resource {
     pub metadata: LSMetadata,
-    pub regions: HashMap<String, usize>,
+    pub regions: BTreeMap<String, usize>,
     pub node_instances: Vec<Node>,
 }
 

@@ -1,8 +1,8 @@
 use bg3_lib::{
     abstract_file_info::PackagedFileInfo,
-    lsf_reader::{NodeAttributeValue, Resource},
+    lsf_reader::{Node, NodeAttributeValue, Resource},
 };
-use egui::{Image, ScrollArea};
+use egui::{CollapsingHeader, Image, ScrollArea};
 use std::{fs::File, io::BufWriter};
 use std::{io::prelude::*, sync::Arc};
 
@@ -37,39 +37,68 @@ impl FileView {
                 let id = format!("bytes://{}", pfi.name.to_string_lossy());
                 let img = Image::from_bytes(id, Arc::clone(image_bytes));
                 ui.add(img);
-                // ui.image(img);
             }
             FileView::NoFileSelected => {
                 ui.label("no file selected");
             }
             FileView::Lsf(_, resource) => {
                 ui.label(format!("region count: {}", resource.regions.len()));
-                if let Some(newage) = resource
-                    .regions
-                    .get("NewAge")
-                    .and_then(|r| resource.node_instances.get(*r))
-                {
-                    for (key, attribute) in &newage.attributes {
-                        ui.horizontal(|ui| {
-                            if ui.button("extract").clicked() {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("LSFM (.lsfm)", &["lsfm"])
-                                    .set_file_name("newage.lsfm")
-                                    .save_file()
-                                {
-                                    if let NodeAttributeValue::Bytes(bytes) = &attribute.value {
-                                        let file = File::create(&path).unwrap();
-                                        let mut writer = BufWriter::new(file);
-                                        writer.write_all(bytes).unwrap();
-                                        println!("saved to {}", path.to_string_lossy());
-                                    }
-                                }
-                            }
-                            ui.label(format!("attribute key: {key}"));
+                ScrollArea::vertical().show(ui, |ui| {
+                    resource
+                        .regions
+                        .values()
+                        .filter_map(|region_root_idx| resource.node_instances.get(*region_root_idx))
+                        .enumerate()
+                        .for_each(|(i, node)| {
+                            ui.push_id(i, |ui| add_node_body(ui, node, &resource.node_instances));
                         });
-                    }
-                }
+                });
             }
         };
     }
+}
+
+fn add_node_body(ui: &mut egui::Ui, node: &Node, node_instances: &[Node]) {
+    let header = format!(
+        "{} ({})",
+        &node.name,
+        node.children.values().map(|c| c.len()).sum::<usize>()
+    );
+    CollapsingHeader::new(&header).show(ui, |ui| {
+        for (attr_name, attr_val) in &node.attributes {
+            if let NodeAttributeValue::Bytes(bytes) = &attr_val.value {
+                ui.horizontal(|ui| {
+                    if ui.button("extract").clicked() {
+                        let file_name = format!("{attr_name}.bin");
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("BIN (.bin)", &["bin"])
+                            .set_file_name(file_name)
+                            .save_file()
+                        {
+                            let file = File::create(&path).unwrap();
+                            let mut writer = BufWriter::new(file);
+                            writer.write_all(bytes).unwrap();
+                            println!("saved to {}", path.to_string_lossy());
+                        }
+                    }
+                    ui.label(format!("{attr_name}: binary data ({} bytes)", bytes.len()));
+                });
+            } else {
+                ui.label(format!("{attr_name}: {attr_val:?}"));
+            }
+        }
+        for (children_category, children_indices) in &node.children {
+            let header = format!("{} ({})", &children_category, children_indices.len());
+
+            CollapsingHeader::new(header).show(ui, |ui| {
+                for (i, child) in children_indices
+                    .iter()
+                    .filter_map(|c| node_instances.get(*c))
+                    .enumerate()
+                {
+                    ui.push_id(i, |ui| add_node_body(ui, child, node_instances));
+                }
+            });
+        }
+    });
 }

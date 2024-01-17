@@ -138,7 +138,7 @@ impl App for Bg3Ui {
             // Collect dropped files:
             ctx.input(|i| {
                 if let Some(dropped_file_path) =
-                    i.raw.dropped_files.get(0).and_then(|rdf| rdf.path.clone())
+                    i.raw.dropped_files.first().and_then(|rdf| rdf.path.clone())
                 {
                     self.set_file_path(&dropped_file_path);
                     self.unpack(&dropped_file_path);

@@ -64,7 +64,7 @@ fn add_node_body(ui: &mut egui::Ui, node: &Node, node_instances: &[Node]) {
         &node.name,
         node.children.values().map(|c| c.len()).sum::<usize>()
     );
-    CollapsingHeader::new(&header).show(ui, |ui| {
+    CollapsingHeader::new(header).show(ui, |ui| {
         for (attr_name, attr_val) in &node.attributes {
             if let NodeAttributeValue::Bytes(bytes) = &attr_val.value {
                 ui.horizontal(|ui| {

@@ -156,7 +156,7 @@ impl PackageReader {
                     .count();
                 let name = String::from_utf8_lossy(&file_entry.name[0..name_len]).to_string();
                 let compression_method: u32 = file_entry.flags as u32 & 0x0F;
-                if compression_method > 2 || (file_entry.flags as u32 & !0x7F) != 0 {
+                if compression_method > 3 || (file_entry.flags as u32 & !0x7F) != 0 {
                     return Err(format!(
                         "File '{}' has unsupported flags: {}",
                         &name, file_entry.flags

@@ -7,12 +7,7 @@ fn main() {
         .expect("usage: <exec> <path to .lsv file>");
     let path = Path::new(&path_arg);
     let mut package_reader = PackageReader::new(path).unwrap();
-    let package = match package_reader.read() {
-        Ok(package) => package,
-
-        Err(e) => panic!("{e}"),
-    };
-
+    let package = package_reader.read().unwrap();
     let resources: Resource = package_reader.load_globals(&package).unwrap();
     println!("regions count: {}", resources.regions.len());
 }

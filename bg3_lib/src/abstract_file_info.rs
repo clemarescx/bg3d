@@ -96,6 +96,7 @@ pub enum CompressionMethod {
     None = 0,
     Zlib = 1,
     LZ4 = 2,
+    ZSTD = 3,
 }
 
 impl CompressionMethod {
@@ -104,6 +105,7 @@ impl CompressionMethod {
             0 => Self::None,
             1 => Self::Zlib,
             2 => Self::LZ4,
+            3 => Self::ZSTD,
             _ => return None,
         };
 

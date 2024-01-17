@@ -36,6 +36,14 @@ pub fn decompress(
 
                 Ok(buf)
             }
+            CompressionMethod::ZSTD => {
+                let cursor = Cursor::new(compressed);
+                let zipfile = zstd::decode_all(cursor)
+                    .map_err(|e| format!("failed to decompress zstd file: {e}"))?;
+
+                Ok(zipfile)
+            }
+
             CompressionMethod::None => Ok(compressed.to_vec()),
         },
         None => Err(format!(

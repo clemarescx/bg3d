@@ -6,9 +6,9 @@ edition.workspace = true
 
 
 [dependencies]
-egui = { version = "0.24.1", features = ["log"] }
-egui_extras = { version = "0.24.2", features = ["all_loaders"] }
-image = { version = "0.24.7", features = ["webp"] }
-eframe = "0.24.1"
-rfd = "0.12.1"
+egui = { version = "0.25.0", features = ["log"] }
+egui_extras = { version = "0.25.0", features = ["all_loaders"] }
+image = { version = "0.24.8", features = ["webp"] }
+eframe = "0.25.0"
+rfd = "0.13.0"
 bg3_lib.workspace = true

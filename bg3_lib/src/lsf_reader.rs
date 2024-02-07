@@ -2,8 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::io::{prelude::*, Cursor, SeekFrom};
 
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 
 use crate::abstract_file_info::CompressionMethod;
 use crate::bin_utils::{self, ReadExt};
@@ -118,36 +117,17 @@ impl LSFReader {
         let mut regions: BTreeMap<String, usize> = BTreeMap::new();
 
         for node_info in self.node_infos.iter() {
-            if node_info.parent_index == -1 {
-                let node_data = self.read_node(node_info, stream)?;
+            let node_data = self.read_node(node_info, stream)?;
+            let node_name = node_data.name;
 
-                let node_name = node_data.name;
-
-                let kind = NodeKind::Region {
-                    name: node_name.clone(),
-                };
-                let region = Node {
-                    kind,
-                    attributes: node_data.attributes.unwrap_or_default(),
-                    name: node_name.clone(),
-                    parent: None,
-                    children: Default::default(),
-                };
-
-                let node_idx = node_instances.len();
-                node_instances.push(region);
-                regions.insert(node_name, node_idx);
-            } else {
-                let node_data = self.read_node(node_info, stream)?;
-
-                let parent_idx = node_info.parent_index as usize;
+            if let Some(parent_index) = node_info.parent_index {
+                let parent_idx = parent_index;
                 let parent = if node_instances.get(parent_idx).is_none() {
                     None
                 } else {
                     Some(parent_idx)
                 };
 
-                let node_name = node_data.name;
                 let node = Node {
                     kind: NodeKind::Node,
                     attributes: node_data.attributes.unwrap_or_default(),
@@ -162,11 +142,25 @@ impl LSFReader {
                     .get_mut(parent_idx)
                     .ok_or_else(|| {
                         format!(
-                            "could not find parent node at index {} in node_instances",
-                            node_info.parent_index
+                            "could not find parent node at index {parent_index} in node_instances"
                         )
                     })?
                     .append_child(&node_name, node_idx);
+            } else {
+                let kind = NodeKind::Region {
+                    name: node_name.clone(),
+                };
+                let region = Node {
+                    kind,
+                    attributes: node_data.attributes.unwrap_or_default(),
+                    name: node_name.clone(),
+                    parent: None,
+                    children: Default::default(),
+                };
+
+                let node_idx = node_instances.len();
+                node_instances.push(region);
+                regions.insert(node_name, node_idx);
             }
         }
 
@@ -201,24 +195,22 @@ impl LSFReader {
             })?
             .clone();
 
-        if defn.first_attribute_index == -1 {
+        let first_attribute_index = if let Some(idx) = defn.first_attribute_index {
+            idx
+        } else {
             return Ok(NodeData {
                 name,
                 attributes: None,
             });
-        }
+        };
 
-        let mut attribute = self
-            .attributes
-            .get(defn.first_attribute_index as usize)
-            .ok_or_else(|| {
-                format!(
-                    "failed getting LSFAttributeInfo at first_attribute_index {}",
-                    defn.first_attribute_index
-                )
-            })?;
+        let mut attribute = self.attributes.get(first_attribute_index).ok_or_else(|| {
+            format!(
+                "failed getting LSFAttributeInfo at first_attribute_index {first_attribute_index}"
+            )
+        })?;
 
-        let mut attributes = HashMap::new();
+        let mut attributes = HashMap::with_capacity(10);
 
         loop {
             stream
@@ -766,7 +758,7 @@ fn read_translated_fs_string(
     Ok(TranslatedFSString { base, arguments })
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Deserialize)]
 pub enum NodeKind {
     #[default]
     Node,
@@ -775,7 +767,7 @@ pub enum NodeKind {
     },
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Deserialize)]
 pub struct Node {
     pub kind: NodeKind,
     pub name: String,
@@ -793,7 +785,7 @@ impl Node {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub enum DataType {
     None = 0,
     Byte = 1,
@@ -899,7 +891,7 @@ impl From<u32> for DataType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct TranslatedString {
     version: u16,
     value: Option<String>,
@@ -916,20 +908,20 @@ impl Display for TranslatedString {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct TranslatedFSString {
     base: TranslatedString,
     arguments: Vec<TranslatedFSStringArgument>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct TranslatedFSStringArgument {
     key: String,
     string: TranslatedFSString,
     value: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub enum NodeAttributeValue {
     None,
     String(String),
@@ -961,7 +953,7 @@ pub enum NodeAttributeValue {
     Uuid(uuid::Uuid),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct NodeAttribute {
     pub ty: DataType,
     pub value: NodeAttributeValue,
@@ -980,25 +972,17 @@ pub enum LSFVersion {
 
 impl LSFVersion {
     fn get(n: u64) -> Option<Self> {
-        if Self::is_valid(n) {
-            let v = match n {
-                0x01 => Self::VerInitial,
-                0x02 => Self::VerChunkedCompress,
-                0x03 => Self::VerExtendedNodes,
-                0x04 => Self::VerBG3,
-                0x05 => Self::VerBG3ExtendedHeader,
-                0x06 => Self::VerBG3AdditionalBlob,
-                0x07 => Self::VerBg3Patch3,
-                _ => return None,
-            };
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    fn is_valid(n: u64) -> bool {
-        (0x01..=0x07).contains(&n)
+        let v = match n {
+            0x01 => Self::VerInitial,
+            0x02 => Self::VerChunkedCompress,
+            0x03 => Self::VerExtendedNodes,
+            0x04 => Self::VerBG3,
+            0x05 => Self::VerBG3ExtendedHeader,
+            0x06 => Self::VerBG3AdditionalBlob,
+            0x07 => Self::VerBg3Patch3,
+            _ => return None,
+        };
+        Some(v)
     }
 }
 
@@ -1107,7 +1091,7 @@ impl LSFMagic {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Deserialize)]
 pub struct Resource {
     pub metadata: LSMetadata,
     pub regions: BTreeMap<String, usize>,
@@ -1133,7 +1117,7 @@ impl Resource {
     }
 }
 
-#[derive(Default, PartialEq)]
+#[derive(Default, Deserialize, PartialEq)]
 pub struct LSMetadata {
     pub timestamp: u64,
     pub major_version: u32,
@@ -1148,10 +1132,10 @@ impl LSMetadata {
 
 #[derive(Debug)]
 pub struct LSFNodeInfo {
-    pub parent_index: i32,
+    pub parent_index: Option<usize>,
     pub name_index: i32,
     pub name_offset: i32,
-    pub first_attribute_index: i32,
+    pub first_attribute_index: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -1164,10 +1148,18 @@ pub struct LSFNodeEntryV3 {
 impl From<LSFNodeEntryV3> for LSFNodeInfo {
     fn from(val: LSFNodeEntryV3) -> Self {
         LSFNodeInfo {
-            parent_index: val.parent_index,
+            parent_index: if val.parent_index < 0 {
+                None
+            } else {
+                Some(val.parent_index as usize)
+            },
             name_index: (val.name_hash_table_index >> 16) as i32,
             name_offset: (val.name_hash_table_index & 0xffff) as i32,
-            first_attribute_index: val.first_attribute_index,
+            first_attribute_index: if val.first_attribute_index == -1 {
+                None
+            } else {
+                Some(val.first_attribute_index as usize)
+            },
         }
     }
 }
@@ -1182,10 +1174,18 @@ pub struct LSFNodeEntryV2 {
 impl From<LSFNodeEntryV2> for LSFNodeInfo {
     fn from(val: LSFNodeEntryV2) -> Self {
         LSFNodeInfo {
-            parent_index: val.parent_index,
+            parent_index: if val.parent_index < 0 {
+                None
+            } else {
+                Some(val.parent_index as usize)
+            },
             name_index: (val.name_hash_table_index >> 16) as i32,
             name_offset: (val.name_hash_table_index & 0xffff) as i32,
-            first_attribute_index: val.first_attribute_index,
+            first_attribute_index: if val.first_attribute_index == -1 {
+                None
+            } else {
+                Some(val.first_attribute_index as usize)
+            },
         }
     }
 }

@@ -36,9 +36,9 @@ impl PackageReader {
             .open(&path)
             .map_err(|e| format!("failed opening {}: {e}", path.to_string_lossy()))?;
 
-        let buffer: Vec<u8> = BufReader::new(file)
-            .bytes()
-            .collect::<Result<Vec<_>, _>>()
+        let mut buffer: Vec<u8> = vec![];
+        let _ = BufReader::new(file)
+            .read_to_end(&mut buffer)
             .map_err(|e| format!("could not read {} in memory: {e}", path.to_string_lossy()))?;
 
         let reader = Cursor::new(buffer);

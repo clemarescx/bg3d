@@ -367,4 +367,17 @@ impl PackageReader {
 
         LSFReader::new().read(self, globals_info)
     }
+
+    pub fn load_all(&mut self, package: &Package) -> Result<Vec<Resource>, String> {
+        package
+            .files
+            .iter()
+            .filter(|pfi| {
+                pfi.name
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("lsf"))
+            })
+            .map(|pfi| LSFReader::new().read(self, pfi))
+            .collect()
+    }
 }

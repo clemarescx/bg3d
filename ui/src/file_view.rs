@@ -64,6 +64,7 @@ fn add_node_body(ui: &mut egui::Ui, node: &Node, node_instances: &[Node]) {
         &node.name,
         node.children.values().map(|c| c.len()).sum::<usize>()
     );
+
     CollapsingHeader::new(header).show(ui, |ui| {
         for (attr_name, attr_val) in &node.attributes {
             if let NodeAttributeValue::Bytes(bytes) = &attr_val.value {
@@ -87,18 +88,13 @@ fn add_node_body(ui: &mut egui::Ui, node: &Node, node_instances: &[Node]) {
                 ui.label(format!("{attr_name}: {attr_val:?}"));
             }
         }
-        for (children_category, children_indices) in &node.children {
-            let header = format!("{} ({})", &children_category, children_indices.len());
 
-            CollapsingHeader::new(header).show(ui, |ui| {
-                for (i, child) in children_indices
-                    .iter()
-                    .filter_map(|c| node_instances.get(*c))
-                    .enumerate()
-                {
+        for children_indices in node.children.values() {
+            for i in children_indices {
+                if let Some(child) = node_instances.get(*i) {
                     ui.push_id(i, |ui| add_node_body(ui, child, node_instances));
                 }
-            });
+            }
         }
     });
 }

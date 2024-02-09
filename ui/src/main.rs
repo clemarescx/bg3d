@@ -65,10 +65,12 @@ impl Bg3Ui {
         ScrollArea::vertical().stick_to_bottom(true).show_rows(
             ui,
             ui.text_style_height(&egui::TextStyle::Body),
-            self.log.len(),
+            10,
             |ui, row_range| {
-                for msg in &self.log[row_range] {
-                    ui.label(msg);
+                if row_range.end <= self.log.len() {
+                    for msg in &self.log[row_range] {
+                        ui.label(msg);
+                    }
                 }
                 ui.allocate_space(ui.available_size())
             },

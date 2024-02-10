@@ -354,14 +354,16 @@ impl LSFReader {
             engine_version.into()
         };
 
-        self.metadata = if magic.version < LSFVersion::VerBG3AdditionalBlob as u32 {
-            let meta: LSFMetadataV5 = bincode::deserialize_from(stream)
-                .map_err(|e| format!("failed to read LSFMetadata V5: {e}"))?;
-            LSFMetadataV6::from(&meta)
-        } else {
-            bincode::deserialize_from(stream)
-                .map_err(|e| format!("failed to read LSFMetadata V6: {e}"))?
-        };
+        if magic.version < LSFVersion::VerBG3AdditionalBlob as u32 {
+            return Err(format!(
+                "LSF versions below {} are not supported (version found: {}",
+                LSFVersion::VerBG3AdditionalBlob as u32,
+                magic.version
+            ));
+        }
+
+        self.metadata = bincode::deserialize_from(stream)
+            .map_err(|e| format!("failed to read LSFMetadata V6: {e}"))?;
         Ok(())
     }
 
@@ -980,24 +982,6 @@ impl LSFVersion {
 }
 
 #[derive(Debug, Deserialize, Default)]
-struct LSFMetadataV5 {
-    strings_uncompressed_size: u32,
-    strings_size_on_disk: u32,
-    nodes_uncompressed_size: u32,
-    nodes_size_on_disk: u32,
-    attributes_uncompressed_size: u32,
-    attributes_size_on_disk: u32,
-    values_uncompressed_size: u32,
-    values_size_on_disk: u32,
-    compression_flags: u8,
-    #[allow(dead_code)]
-    unknown_2: u8,
-    #[allow(dead_code)]
-    unknown_3: u16,
-    has_sibling_data: u32,
-}
-
-#[derive(Debug, Deserialize, Default)]
 pub struct LSFMetadataV6 {
     strings_uncompressed_size: u32,
     strings_size_on_disk: u32,
@@ -1015,25 +999,6 @@ pub struct LSFMetadataV6 {
     #[allow(dead_code)]
     unknown_3: u16,
     has_sibling_data: u32,
-}
-impl From<&LSFMetadataV5> for LSFMetadataV6 {
-    fn from(meta: &LSFMetadataV5) -> Self {
-        Self {
-            strings_uncompressed_size: meta.strings_uncompressed_size,
-            strings_size_on_disk: meta.strings_size_on_disk,
-            unknown: 0,
-            nodes_uncompressed_size: meta.nodes_uncompressed_size,
-            nodes_size_on_disk: meta.nodes_size_on_disk,
-            attributes_uncompressed_size: meta.attributes_uncompressed_size,
-            attributes_size_on_disk: meta.attributes_size_on_disk,
-            values_uncompressed_size: meta.values_uncompressed_size,
-            values_size_on_disk: meta.values_size_on_disk,
-            compression_flags: meta.compression_flags,
-            unknown_2: 0,
-            unknown_3: 0,
-            has_sibling_data: meta.has_sibling_data,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]

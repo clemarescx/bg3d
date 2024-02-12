@@ -512,7 +512,7 @@ impl LSFReader {
         stream: &mut Cursor<&[u8]>,
         length: u32,
     ) -> Result<NodeAttribute, String> {
-        let attr = match type_id {
+        let attr_val = match type_id {
             DataType::String
             | DataType::Path
             | DataType::FixedString
@@ -520,10 +520,7 @@ impl LSFReader {
             | DataType::WString
             | DataType::LSWString => {
                 let value: String = read_string(stream, length)?;
-                NodeAttribute {
-                    ty: type_id,
-                    value: NodeAttributeValue::String(value),
-                }
+                NodeAttributeValue::String(value)
             }
 
             DataType::TranslatedString => {
@@ -555,18 +552,12 @@ impl LSFReader {
                     handle,
                 };
 
-                NodeAttribute {
-                    ty: type_id,
-                    value: NodeAttributeValue::TranslatedString(str_value),
-                }
+                NodeAttributeValue::TranslatedString(str_value)
             }
 
             DataType::TranslatedFSString => {
                 let value = read_translated_fs_string(stream, self.version)?;
-                NodeAttribute {
-                    ty: type_id,
-                    value: NodeAttributeValue::TranslatedFSString(value),
-                }
+                NodeAttributeValue::TranslatedFSString(value)
             }
 
             DataType::ScratchBuffer => {
@@ -575,126 +566,116 @@ impl LSFReader {
                     format!("failed to read ScratchBuffer attribute value (length: {length}): {e}")
                 })?;
 
-                NodeAttribute {
-                    ty: type_id,
-                    value: NodeAttributeValue::Bytes(buf),
-                }
+                NodeAttributeValue::Bytes(buf)
             }
 
-            _ => read_attribute(stream, type_id)?,
+            DataType::Byte => {
+                let value = stream.read_u8()?;
+                NodeAttributeValue::Byte(value)
+            }
+            DataType::Short => {
+                let value = stream.read_i16()?;
+                NodeAttributeValue::Short(value)
+            }
+            DataType::UShort => {
+                let value = stream.read_u16()?;
+                NodeAttributeValue::UShort(value)
+            }
+            DataType::Int => {
+                let value = stream.read_i32()?;
+                NodeAttributeValue::Int(value)
+            }
+            DataType::UInt => {
+                let value = stream.read_u32()?;
+                NodeAttributeValue::UInt(value)
+            }
+            DataType::Float => {
+                let value = stream.read_f32()?;
+                NodeAttributeValue::Float(value)
+            }
+            DataType::Double => {
+                let value = stream.read_f64()?;
+                NodeAttributeValue::Double(value)
+            }
+            DataType::IVec2 => {
+                let value = stream.read_i32_vec::<2>()?;
+                NodeAttributeValue::IVec2(value)
+            }
+            DataType::IVec3 => {
+                let value = stream.read_i32_vec::<3>()?;
+                NodeAttributeValue::IVec3(value)
+            }
+            DataType::IVec4 => {
+                let value = stream.read_i32_vec::<4>()?;
+                NodeAttributeValue::IVec4(value)
+            }
+            DataType::Vec2 => {
+                let value = stream.read_f32_vec::<2>()?;
+                NodeAttributeValue::Vec2(value)
+            }
+            DataType::Vec3 => {
+                let value = stream.read_f32_vec::<3>()?;
+                NodeAttributeValue::Vec3(value)
+            }
+            DataType::Vec4 => {
+                let value = stream.read_f32_vec::<4>()?;
+                NodeAttributeValue::Vec4(value)
+            }
+            DataType::Mat2 => {
+                let value = stream.read_f32_mat::<2, 2>()?;
+                NodeAttributeValue::Mat2(value)
+            }
+            DataType::Mat3 => {
+                let value = stream.read_f32_mat::<3, 3>()?;
+                NodeAttributeValue::Mat3(value)
+            }
+            DataType::Mat3x4 => {
+                let value = stream.read_f32_mat::<4, 3>()?;
+                NodeAttributeValue::Mat3x4(value)
+            }
+            DataType::Mat4x3 => {
+                let value = stream.read_f32_mat::<3, 4>()?;
+                NodeAttributeValue::Mat4x3(value)
+            }
+            DataType::Mat4 => {
+                let value = stream.read_f32_mat::<4, 4>()?;
+                NodeAttributeValue::Mat4(value)
+            }
+            DataType::Bool => {
+                let value = stream.read_u8()? != 0;
+                NodeAttributeValue::Bool(value)
+            }
+            DataType::ULongLong => {
+                let value = stream.read_u64()?;
+                NodeAttributeValue::UInt64(value)
+            }
+            DataType::Long | DataType::Int64 => {
+                let value = stream.read_i64()?;
+                NodeAttributeValue::Int64(value)
+            }
+            DataType::Int8 => {
+                let value = stream.read_i8()?;
+                NodeAttributeValue::I8(value)
+            }
+            DataType::Uuid => {
+                let value = stream.read_uuid()?;
+                NodeAttributeValue::Uuid(value)
+            }
+            DataType::None => NodeAttributeValue::None,
+            _ => {
+                return Err(format!(
+                    "read_attribute not inplemented for type id {type_id:?}"
+                ))
+            }
+        };
+
+        let attr = NodeAttribute {
+            ty: type_id,
+            value: attr_val,
         };
 
         Ok(attr)
     }
-}
-
-fn read_attribute(stream: &mut Cursor<&[u8]>, type_id: DataType) -> Result<NodeAttribute, String> {
-    let attr = match type_id {
-        DataType::None => NodeAttributeValue::None,
-        DataType::Byte => {
-            let value = stream.read_u8()?;
-            NodeAttributeValue::Byte(value)
-        }
-        DataType::Short => {
-            let value = stream.read_i16()?;
-            NodeAttributeValue::Short(value)
-        }
-        DataType::UShort => {
-            let value = stream.read_u16()?;
-            NodeAttributeValue::UShort(value)
-        }
-        DataType::Int => {
-            let value = stream.read_i32()?;
-            NodeAttributeValue::Int(value)
-        }
-        DataType::UInt => {
-            let value = stream.read_u32()?;
-            NodeAttributeValue::UInt(value)
-        }
-        DataType::Float => {
-            let value = stream.read_f32()?;
-            NodeAttributeValue::Float(value)
-        }
-        DataType::Double => {
-            let value = stream.read_f64()?;
-            NodeAttributeValue::Double(value)
-        }
-        DataType::IVec2 => {
-            let value = stream.read_i32_vec::<2>()?;
-            NodeAttributeValue::IVec2(value)
-        }
-        DataType::IVec3 => {
-            let value = stream.read_i32_vec::<3>()?;
-            NodeAttributeValue::IVec3(value)
-        }
-        DataType::IVec4 => {
-            let value = stream.read_i32_vec::<4>()?;
-            NodeAttributeValue::IVec4(value)
-        }
-        DataType::Vec2 => {
-            let value = stream.read_f32_vec::<2>()?;
-            NodeAttributeValue::Vec2(value)
-        }
-        DataType::Vec3 => {
-            let value = stream.read_f32_vec::<3>()?;
-            NodeAttributeValue::Vec3(value)
-        }
-        DataType::Vec4 => {
-            let value = stream.read_f32_vec::<4>()?;
-            NodeAttributeValue::Vec4(value)
-        }
-        DataType::Mat2 => {
-            let value = stream.read_f32_mat::<2, 2>()?;
-            NodeAttributeValue::Mat2(value)
-        }
-        DataType::Mat3 => {
-            let value = stream.read_f32_mat::<3, 3>()?;
-            NodeAttributeValue::Mat3(value)
-        }
-        DataType::Mat3x4 => {
-            let value = stream.read_f32_mat::<4, 3>()?;
-            NodeAttributeValue::Mat3x4(value)
-        }
-        DataType::Mat4x3 => {
-            let value = stream.read_f32_mat::<3, 4>()?;
-            NodeAttributeValue::Mat4x3(value)
-        }
-        DataType::Mat4 => {
-            let value = stream.read_f32_mat::<4, 4>()?;
-            NodeAttributeValue::Mat4(value)
-        }
-        DataType::Bool => {
-            let value = stream.read_u8()? != 0;
-            NodeAttributeValue::Bool(value)
-        }
-        DataType::ULongLong => {
-            let value = stream.read_u64()?;
-            NodeAttributeValue::UInt64(value)
-        }
-        DataType::Long | DataType::Int64 => {
-            let value = stream.read_i64()?;
-            NodeAttributeValue::Int64(value)
-        }
-        DataType::Int8 => {
-            let value = stream.read_i8()?;
-            NodeAttributeValue::I8(value)
-        }
-        DataType::Uuid => {
-            let value = stream.read_uuid()?;
-            NodeAttributeValue::Uuid(value)
-        }
-
-        _ => {
-            return Err(format!(
-                "read_attribute not inplemented for type id {type_id:?}"
-            ))
-        }
-    };
-
-    Ok(NodeAttribute {
-        ty: type_id,
-        value: attr,
-    })
 }
 
 fn read_string(stream: &mut Cursor<&[u8]>, length: u32) -> Result<String, String> {

@@ -42,15 +42,14 @@ impl FileView {
                 ui.label("no file selected");
             }
             FileView::Lsf(_, resource) => {
-                ui.label(format!("region count: {}", resource.regions.len()));
+                ui.label(format!("region count: {}", resource.regions.region_count()));
                 ScrollArea::vertical().show(ui, |ui| {
                     resource
                         .regions
-                        .values()
-                        .filter_map(|region_root_idx| resource.node_instances.get(*region_root_idx))
+                        .get_region_nodes()
                         .enumerate()
                         .for_each(|(i, node)| {
-                            ui.push_id(i, |ui| add_node_body(ui, node, &resource.node_instances));
+                            ui.push_id(i, |ui| add_node_body(ui, node, resource));
                         });
                 });
             }
@@ -58,7 +57,7 @@ impl FileView {
     }
 }
 
-fn add_node_body(ui: &mut egui::Ui, node: &Node, node_instances: &[Node]) {
+fn add_node_body(ui: &mut egui::Ui, node: &Node, resource: &Resource) {
     let header = format!(
         "{} ({})",
         &node.name,
@@ -91,8 +90,8 @@ fn add_node_body(ui: &mut egui::Ui, node: &Node, node_instances: &[Node]) {
 
         for children_indices in node.children.values() {
             for i in children_indices {
-                if let Some(child) = node_instances.get(*i) {
-                    ui.push_id(i, |ui| add_node_body(ui, child, node_instances));
+                if let Some(child) = resource.regions.get_node(*i) {
+                    ui.push_id(i, |ui| add_node_body(ui, child, resource));
                 }
             }
         }

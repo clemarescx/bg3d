@@ -103,16 +103,19 @@ impl LSFReader {
         )?;
 
         let mut values_stream = Cursor::new(&self.values[..]);
-        let mut resource = self.read_regions(&mut values_stream)?;
-        resource.metadata.major_version = self.game_version.major;
-        resource.metadata.minor_version = self.game_version.minor;
-        resource.metadata.revision = self.game_version.revision;
-        resource.metadata.build_number = self.game_version.build;
+        let regions = self.read_regions(&mut values_stream)?;
+
+        let mut resource = Resource {
+            regions,
+            ..Default::default()
+        };
+
+        resource.metadata.game_version = self.game_version;
 
         Ok(resource)
     }
 
-    fn read_regions(&self, stream: &mut Cursor<&[u8]>) -> Result<Resource, String> {
+    fn read_regions(&self, stream: &mut Cursor<&[u8]>) -> Result<RegionArena, String> {
         let mut node_instances: Vec<Node> = Vec::with_capacity(self.node_infos.len());
         let mut regions: BTreeMap<String, usize> = BTreeMap::new();
 
@@ -164,12 +167,12 @@ impl LSFReader {
             }
         }
 
-        let mut resource = Resource::new();
+        let regions = RegionArena {
+            regions_indices: regions,
+            node_instances,
+        };
 
-        resource.regions = regions;
-        resource.node_instances = node_instances;
-
-        Ok(resource)
+        Ok(regions)
     }
 
     fn read_node(
@@ -1043,7 +1046,7 @@ impl From<&LSFMetadataV5> for LSFMetadataV6 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct PackedVersion {
     major: u32,
     minor: u32,
@@ -1091,22 +1094,46 @@ impl LSFMagic {
     }
 }
 
-#[derive(PartialEq, Deserialize)]
+#[derive(PartialEq, Default)]
+pub struct RegionArena {
+    pub regions_indices: BTreeMap<String, usize>,
+    pub node_instances: Vec<Node>,
+}
+
+impl RegionArena {
+    pub fn get_region_nodes(&self) -> impl Iterator<Item = &Node> {
+        self.regions_indices
+            .values()
+            .filter_map(|region_root_idx| self.node_instances.get(*region_root_idx))
+    }
+
+    pub fn get_node(&self, i: usize) -> Option<&Node> {
+        self.node_instances.get(i)
+    }
+
+    pub fn region_count(&self) -> usize {
+        self.regions_indices.len()
+    }
+}
+
+#[derive(PartialEq)]
 pub struct Resource {
     pub metadata: LSMetadata,
-    pub regions: BTreeMap<String, usize>,
-    pub node_instances: Vec<Node>,
+    pub regions: RegionArena,
 }
 
 impl Default for Resource {
     fn default() -> Self {
+        let game_version = PackedVersion {
+            major: 3,
+            ..Default::default()
+        };
         Self {
             metadata: LSMetadata {
-                major_version: 3,
+                game_version,
                 ..Default::default()
             },
             regions: Default::default(),
-            node_instances: Default::default(),
         }
     }
 }
@@ -1117,13 +1144,10 @@ impl Resource {
     }
 }
 
-#[derive(Default, Deserialize, PartialEq)]
+#[derive(Default, PartialEq)]
 pub struct LSMetadata {
     pub timestamp: u64,
-    pub major_version: u32,
-    pub minor_version: u32,
-    pub revision: u32,
-    pub build_number: u32,
+    pub game_version: PackedVersion,
 }
 
 impl LSMetadata {
@@ -1136,13 +1160,14 @@ pub struct LSFNodeInfo {
     pub name_index: i32,
     pub name_offset: i32,
     pub first_attribute_index: Option<usize>,
+    pub next_sibling_index: Option<i32>,
 }
 
 #[derive(Deserialize)]
 pub struct LSFNodeEntryV3 {
     name_hash_table_index: u32,
     parent_index: i32,
-    _next_sibling_index: i32,
+    next_sibling_index: i32,
     first_attribute_index: i32,
 }
 impl From<LSFNodeEntryV3> for LSFNodeInfo {
@@ -1160,6 +1185,7 @@ impl From<LSFNodeEntryV3> for LSFNodeInfo {
             } else {
                 Some(val.first_attribute_index as usize)
             },
+            next_sibling_index: Some(val.next_sibling_index),
         }
     }
 }
@@ -1186,6 +1212,7 @@ impl From<LSFNodeEntryV2> for LSFNodeInfo {
             } else {
                 Some(val.first_attribute_index as usize)
             },
+            next_sibling_index: None,
         }
     }
 }

@@ -684,26 +684,25 @@ fn read_string(stream: &mut Cursor<&[u8]>, length: u32) -> Result<String, String
         .read_exact(&mut bytes)
         .map_err(|e| format!("could not read {length} bytes from attribute reader: {e}"))?;
 
-    match std::ffi::CString::from_vec_with_nul(bytes.clone()) {
-        Ok(cstring) => cstring
+    if let Ok(cstring) = std::ffi::CString::from_vec_with_nul(bytes.clone()) {
+        return cstring
             .into_string()
-            .map_err(|e| format!("error converting CString into UTF8 String: {e}")),
-        Err(_) => match bytes.last() {
-            Some(0) => {
-                let mut last_null = bytes.len() - 1;
-                while last_null > 0 && bytes[last_null - 1] == 0 {
-                    last_null -= 1;
-                }
-                bytes.truncate(last_null);
-                String::from_utf8(bytes)
-                    .map_err(|e| format!("error converting bytes to UTF8 string: {e}"))
+            .map_err(|e| format!("error converting CString into UTF8 String: {e}"));
+    }
+
+    match &bytes[..] {
+        [non_null @ .., 0] => {
+            let mut last_null = non_null.len();
+            while last_null > 0 && bytes[last_null - 1] == 0 {
+                last_null -= 1;
             }
-            Some(_) => Err(
-                "error reading string from attribute reader: string is not null-terminated"
-                    .to_string(),
-            ),
-            _ => Ok(String::new()),
-        },
+            bytes.truncate(last_null);
+            String::from_utf8(bytes)
+                .map_err(|e| format!("error converting bytes to UTF8 string: {e}"))
+        }
+        [.., _] => String::from_utf8(bytes)
+            .map_err(|e| format!("error converting bytes to UTF8 string: {e}")),
+        _ => Ok(String::new()),
     }
 }
 

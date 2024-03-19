@@ -10,45 +10,45 @@ pub fn decompress(
     compression_flags: u8,
     chunked: bool,
 ) -> Result<Vec<u8>, String> {
-    match CompressionMethod::get(compression_flags) {
-        Some(val) => match val {
-            CompressionMethod::LZ4 => {
-                if chunked {
-                    let br = Cursor::new(compressed);
-                    let mut buf = vec![0; decompressed_size];
-                    lz4_flex::frame::FrameDecoder::new(br)
-                        .read_exact(&mut buf)
-                        .map_err(|e| {
-                            format!("failed to decompress LZ4 chunked (frame) file: {e}")
-                        })?;
-                    Ok(buf)
-                } else {
-                    lz4_flex::block::decompress(compressed, decompressed_size)
-                        .map_err(|e| format!("failed to decompress LZ4 block file: {e}"))
-                }
-            }
-
-            CompressionMethod::Zlib => {
-                let mut br = ZlibDecoder::new(compressed);
-                let mut buf = vec![0; decompressed_size];
-                br.read_exact(&mut buf[..])
-                    .map_err(|e| format!("failed to decompress zlib file: {e}"))?;
-
-                Ok(buf)
-            }
-            CompressionMethod::ZSTD => {
-                let cursor = Cursor::new(compressed);
-                let zipfile = zstd::decode_all(cursor)
-                    .map_err(|e| format!("failed to decompress zstd file: {e}"))?;
-
-                Ok(zipfile)
-            }
-
-            CompressionMethod::None => Ok(compressed.to_vec()),
-        },
-        None => Err(format!(
+    let Some(val) = CompressionMethod::get(compression_flags) else {
+        return Err(format!(
             "unsupported compression method - flags {compression_flags}"
-        )),
+        ));
+    };
+
+    match val {
+        CompressionMethod::LZ4 => {
+            if chunked {
+                let br = Cursor::new(compressed);
+                let mut buf = vec![0; decompressed_size];
+                lz4_flex::frame::FrameDecoder::new(br)
+                    .read_exact(&mut buf)
+                    .map_err(|e| format!("failed to decompress LZ4 chunked (frame) file: {e}"))?;
+                Ok(buf)
+            } else {
+                lz4_flex::block::decompress(compressed, decompressed_size)
+                    .map_err(|e| format!("failed to decompress LZ4 block file: {e}"))
+            }
+        }
+
+        CompressionMethod::Zlib => {
+            let mut br = ZlibDecoder::new(compressed);
+            let mut buf = vec![0; decompressed_size];
+            br.read_exact(&mut buf[..])
+                .map_err(|e| format!("failed to decompress zlib file: {e}"))?;
+
+            Ok(buf)
+        }
+
+        CompressionMethod::ZSTD => {
+            let cursor = Cursor::new(compressed);
+            let zipfile = zstd::decode_all(cursor)
+                .map_err(|e| format!("failed to decompress zstd file: {e}"))?;
+
+            Ok(zipfile)
+        }
+
+        CompressionMethod::None => Ok(compressed.to_vec()),
     }
 }
 

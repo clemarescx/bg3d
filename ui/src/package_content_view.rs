@@ -109,7 +109,7 @@ impl PackageContentView {
             .package_files
             .deserialized_files
             .get(package_file_idx)
-            .map(Rc::clone)
+            .cloned()
         {
             return Ok(view);
         }

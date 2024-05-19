@@ -374,8 +374,6 @@ impl LSFReader {
 
         let mut names = Vec::with_capacity(num_hash_entries as usize);
         while num_hash_entries > 0 {
-            num_hash_entries -= 1;
-
             let mut num_strings = stream
                 .read_u16()
                 .map_err(|e| format!("failed reading number of strings: {e}"))?;
@@ -397,6 +395,7 @@ impl LSFReader {
             }
 
             names.push(hash);
+            num_hash_entries -= 1;
         }
 
         Ok(names)
@@ -1153,11 +1152,6 @@ impl From<LSFNodeEntryV2> for LSFNodeInfo {
             next_sibling_index: None,
         }
     }
-}
-
-trait LSFNodeVEntry {
-    fn name_index(&self) -> i32;
-    fn name_offset(&self) -> i32;
 }
 
 #[derive(Debug)]

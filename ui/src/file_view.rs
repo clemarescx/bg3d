@@ -43,15 +43,17 @@ impl FileView {
             }
             FileView::Lsf(_, resource) => {
                 ui.label(format!("region count: {}", resource.regions.region_count()));
-                ScrollArea::vertical().show(ui, |ui| {
-                    resource
-                        .regions
-                        .get_region_nodes()
-                        .enumerate()
-                        .for_each(|(i, node)| {
-                            ui.push_id(i, |ui| add_node_body(ui, node, resource));
+                ScrollArea::vertical()
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        egui::Frame::none().outer_margin(10.0).show(ui, |ui| {
+                            resource.regions.get_region_nodes().enumerate().for_each(
+                                |(i, node)| {
+                                    ui.push_id(i, |ui| add_node_body(ui, node, resource));
+                                },
+                            );
                         });
-                });
+                    });
             }
         };
     }
@@ -88,12 +90,24 @@ fn add_node_body(ui: &mut egui::Ui, node: &Node, resource: &Resource) {
             }
         }
 
-        for children_indices in node.children.values() {
-            for i in children_indices {
-                if let Some(child) = resource.regions.get_node(*i) {
-                    ui.push_id(i, |ui| add_node_body(ui, child, resource));
+        let children_indices: Vec<_> = node.children.values().flatten().copied().collect();
+        let num_rows = children_indices.len();
+        let row_height = ui.text_style_height(&egui::TextStyle::Body);
+
+        ScrollArea::vertical().auto_shrink([false, true]).show_rows(
+            ui,
+            row_height,
+            num_rows,
+            |ui, row_range| {
+                for row in row_range {
+                    let c = children_indices
+                        .get(row)
+                        .and_then(|i| resource.regions.get_node(*i));
+                    if let Some(child) = c {
+                        ui.push_id(row, |ui| add_node_body(ui, child, resource));
+                    }
                 }
-            }
-        }
+            },
+        );
     });
 }

@@ -1,13 +1,11 @@
 mod file_view;
 mod package_content_view;
 
-use std::{
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{cell::Cell, path::PathBuf};
 
 use eframe::{run_native, App, NativeOptions};
 use egui::{CentralPanel, ScrollArea, SidePanel, TopBottomPanel};
+use egui_file_dialog::FileDialog;
 use file_view::FileView;
 use package_content_view::PackageContentView;
 
@@ -32,31 +30,42 @@ fn main() -> Result<(), eframe::Error> {
 
 #[derive(Default)]
 struct Bg3Ui {
-    path: Option<(String, PathBuf)>,
+    file_dialog: FileDialog,
+    path: Cell<FileState>,
+    file_name: Option<String>,
     log: Vec<String>,
     package_list: Option<PackageContentView>,
-    file_view: Option<Rc<FileView>>,
+    file_view: FileView,
+}
+
+#[derive(Default)]
+enum FileState {
+    #[default]
+    None,
+    PendingUnpack(PathBuf),
+    Unpacked(PathBuf),
 }
 
 impl Bg3Ui {
     pub fn open(path: Option<PathBuf>) -> Self {
-        let mut bg3_ui = Self {
-            file_view: Some(Rc::new(FileView::NoFileSelected)),
-            ..Default::default()
-        };
-        if let Some(p) = path {
+        let path = if let Some(p) = path {
             if p.exists() {
-                bg3_ui.set_file_path(&p);
-                bg3_ui.unpack(&p);
+                FileState::PendingUnpack(p)
             } else {
                 eprintln!(
                     "could not find file in path argument: {}",
                     p.to_string_lossy()
                 );
+                FileState::None
             }
-        }
+        } else {
+            FileState::None
+        };
 
-        bg3_ui
+        Self {
+            path: Cell::new(path),
+            ..Default::default()
+        }
     }
 
     fn render_log(&self, ui: &mut eframe::egui::Ui) {
@@ -77,30 +86,29 @@ impl Bg3Ui {
         );
     }
 
-    fn set_file_path(&mut self, path: &Path) {
-        self.clear();
-        if let Some(file) = path.file_name() {
-            println!("Setting filepath: {file:?}");
-            self.path = Some((file.to_string_lossy().to_string(), path.to_path_buf()));
-        }
-    }
-
-    fn unpack(&mut self, picked_path: &Path) {
-        println!("Listing files in package...");
-        match PackageContentView::init(picked_path) {
-            Ok(package_view) => self.package_list = Some(package_view),
-            Err(e) => self.log_message(format!("could not unpack file: {e}")),
+    fn unpack(&mut self) {
+        if let FileState::PendingUnpack(picked_path) = self.path.take() {
+            if let Some(file) = picked_path.file_name() {
+                println!("Setting filepath: {file:?}");
+                self.file_name = Some(file.to_string_lossy().to_string());
+            }
+            println!("Listing files in package...");
+            match PackageContentView::init(&picked_path) {
+                Ok(package_view) => self.package_list = Some(package_view),
+                Err(e) => self.log_message(format!("could not unpack file: {e}")),
+            }
+            self.path.set(FileState::Unpacked(picked_path));
         }
     }
 
     fn clear(&mut self) {
         println!("Clearing view...");
-        self.path = None;
+        self.path.set(FileState::None);
         if let Some(package_list) = self.package_list.as_mut() {
             package_list.clear();
             self.package_list = None;
         }
-        self.file_view = None;
+        self.file_view.clear();
     }
 
     fn log_message(&mut self, format: String) {
@@ -115,17 +123,23 @@ impl App for Bg3Ui {
             ui.horizontal(|ui| {
                 ui.label("Drop a .lsv file on the window, or");
                 if ui.button("Open .lsv...").clicked() {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .add_filter("LSV (.lsv)", &["lsv"])
-                        .pick_file()
-                    {
-                        self.set_file_path(&path);
-                        self.unpack(&path);
-                    }
+                    self.file_dialog.select_file();
                 }
             });
 
-            if let Some((filename, _)) = self.path.clone() {
+            if let Some(path) = self.file_dialog.update(ctx).selected() {
+                match self.path.take() {
+                    FileState::None => {
+                        self.path.set(FileState::PendingUnpack(path.to_path_buf()));
+                    }
+                    FileState::Unpacked(old) if old != path => {
+                        self.path.set(FileState::PendingUnpack(path.to_path_buf()));
+                    }
+                    previous => self.path.set(previous),
+                };
+            }
+
+            if let Some(filename) = self.file_name.clone() {
                 ui.horizontal(|ui| {
                     ui.label("Picked file:");
                     ui.monospace(filename);
@@ -142,8 +156,7 @@ impl App for Bg3Ui {
                 if let Some(dropped_file_path) =
                     i.raw.dropped_files.first().and_then(|rdf| rdf.path.clone())
                 {
-                    self.set_file_path(&dropped_file_path);
-                    self.unpack(&dropped_file_path);
+                    self.path.set(FileState::PendingUnpack(dropped_file_path));
                 }
             });
         });
@@ -151,15 +164,11 @@ impl App for Bg3Ui {
         if let Some(package_view) = &mut self.package_list {
             let mut render_error = Ok(());
             SidePanel::left("left_panel").show(ctx, |ui| {
-                render_error = package_view.render(ui);
+                render_error = package_view.render(ui, ctx);
             });
 
-            match package_view.get_selected_file_view() {
-                Ok(view) => {
-                    self.file_view = Some(Rc::clone(&view));
-                }
-                Err(e) => self.log_message(e),
-            };
+            let selected_file_view = package_view.get_selected_file_view();
+            self.file_view.set(selected_file_view);
 
             if let Err(e) = render_error {
                 self.log_message(e);
@@ -171,12 +180,10 @@ impl App for Bg3Ui {
             .show(ctx, |ui| self.render_log(ui));
 
         CentralPanel::default().show(ctx, |ui| {
-            if let Some(fv) = self.file_view.as_mut() {
-                fv.render(ui);
-            } else {
-                FileView::NoFileSelected.render(ui);
-            }
+            self.file_view.render(ui, ctx);
         });
+
+        self.unpack();
     }
 }
 

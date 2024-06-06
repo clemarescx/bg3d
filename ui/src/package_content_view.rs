@@ -5,17 +5,19 @@ use std::{
     sync::Arc,
 };
 
-use crate::file_view::FileView;
+use crate::file_view::FileViewType;
 use bg3_lib::{
     abstract_file_info::PackagedFileInfo, lsf_reader::LSFReader, package_reader::PackageReader,
     package_version::PackageVersion,
 };
 use egui::{Color32, RichText};
+use egui_file_dialog::FileDialog;
 
 pub(crate) struct PackageContentView {
     reader: PackageReader,
     package_files: PackageFiles,
     selected_packedfile: Option<String>,
+    file_dialog: FileDialog,
 }
 
 impl PackageContentView {
@@ -53,56 +55,61 @@ impl PackageContentView {
             reader: pr,
             package_files,
             selected_packedfile: None,
+            file_dialog: FileDialog::new(),
         })
     }
 
-    pub fn render(&mut self, ui: &mut egui::Ui) -> Result<(), String> {
-        let package_files = &mut self.package_files;
-
+    pub fn render(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> Result<(), String> {
         ui.horizontal(|ui| {
-            ui.label(format!("version: {:#?}", &package_files.version));
+            ui.label(format!("version: {:#?}", &self.package_files.version));
             ui.label(format!(
                 "file count: {}",
-                package_files.package_file_infos.len()
+                self.package_files.package_file_infos.len()
             ));
         });
 
         ui.label("files:");
-        for (name, pf) in &package_files.package_file_infos {
+        for (name, pf) in self.package_files.package_file_infos.iter() {
             let filename = RichText::new(&format!("[{}] {name:?}", pf.pfi.archive_part))
                 .color(Color32::LIGHT_GREEN);
 
             ui.selectable_value(&mut self.selected_packedfile, Some(name.clone()), filename);
         }
 
-        if let Some(pfi_name) = self.selected_packedfile.as_ref() {
+        if let Some(pfi_name) = self.selected_packedfile.clone() {
             ui.separator();
             ui.horizontal(|ui| {
                 ui.label("selected:");
                 ui.label(pfi_name);
             });
+        }
 
-            if let Some(PackageFile { pfi, .. }) = package_files.package_file_infos.get(pfi_name) {
-                ui.label(pfi.to_string());
+        let pf = self
+            .selected_packedfile
+            .clone()
+            .and_then(|pfi_name| self.package_files.package_file_infos.get(&pfi_name));
 
-                if ui.button("extract").clicked() {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .set_file_name(pfi.name.to_string_lossy())
-                        .pick_folder()
-                    {
-                        self.reader.extract_file(pfi, Some(path))?;
-                    }
-                }
+        if let Some(PackageFile { pfi, .. }) = pf {
+            ui.label(pfi.to_string());
+            if ui.button("extract").clicked() {
+                self.file_dialog.select_directory();
+            }
+
+            self.file_dialog.update(ctx);
+
+            if let Some(path) = self.file_dialog.take_selected() {
+                self.reader.extract_file(pfi, Some(path.to_path_buf()))?;
             }
         }
+
         Ok(())
     }
 
-    pub(crate) fn get_selected_file_view(&mut self) -> Result<Rc<FileView>, String> {
+    pub(crate) fn get_selected_file_view(&mut self) -> Rc<FileViewType> {
         let package_file_idx = if let Some(file_name) = self.selected_packedfile.as_ref() {
             file_name
         } else {
-            return Ok(Rc::new(FileView::NoFileSelected));
+            return Rc::new(FileViewType::NoFileSelected);
         };
 
         if let Some(view) = self
@@ -111,29 +118,33 @@ impl PackageContentView {
             .get(package_file_idx)
             .cloned()
         {
-            return Ok(view);
+            return view;
         }
 
-        let package_file = self
-            .package_files
-            .package_file_infos
-            .get(package_file_idx)
-            .ok_or_else(|| format!("missing package file info for {package_file_idx}"))?;
+        let Some(package_file) = self.package_files.package_file_infos.get(package_file_idx) else {
+            let error_view = FileViewType::ReadError {
+                error: format!("missing package file info for {package_file_idx}"),
+                filename: package_file_idx.clone(),
+            };
+            return Rc::new(error_view);
+        };
 
         println!(
             "Deserializing file {}...",
             package_file.pfi.name.to_string_lossy()
         );
 
-        let view: FileView = match &package_file.file_type {
+        let view: FileViewType = match &package_file.file_type {
             FileType::Json => {
                 let json_text_result = self
                     .reader
                     .decompress_file(&package_file.pfi)
                     .map(|d| String::from_utf8_lossy(&d).to_string());
                 match json_text_result {
-                    Ok(json_text) => FileView::Json(package_file.pfi.clone(), json_text.clone()),
-                    Err(e) => FileView::ReadError {
+                    Ok(json_text) => {
+                        FileViewType::Json(package_file.pfi.clone(), json_text.clone())
+                    }
+                    Err(e) => FileViewType::ReadError {
                         error: e.clone(),
                         filename: package_file_idx.clone(),
                     },
@@ -143,8 +154,8 @@ impl PackageContentView {
                 let mut lsf = LSFReader::new();
                 let lsf_result = lsf.read(&mut self.reader, &package_file.pfi);
                 match lsf_result {
-                    Ok(resource) => FileView::Lsf(package_file.pfi.clone(), resource),
-                    Err(e) => FileView::ReadError {
+                    Ok(resource) => FileViewType::Lsf(package_file.pfi.clone(), resource),
+                    Err(e) => FileViewType::ReadError {
                         error: e.clone(),
                         filename: package_file_idx.clone(),
                     },
@@ -156,9 +167,9 @@ impl PackageContentView {
                 match wepb_image {
                     Ok(image_bytes) => {
                         let arc: Arc<[u8]> = image_bytes.into();
-                        FileView::Image(package_file.pfi.clone(), arc)
+                        FileViewType::Image(package_file.pfi.clone(), arc)
                     }
-                    Err(e) => FileView::ReadError {
+                    Err(e) => FileViewType::ReadError {
                         error: e.clone(),
                         filename: package_file_idx.clone(),
                     },
@@ -166,7 +177,7 @@ impl PackageContentView {
             }
 
             FileType::Bin | FileType::Unknown => {
-                FileView::Unsupported(package_file_idx.clone(), package_file.file_type.clone())
+                FileViewType::Unsupported(package_file_idx.clone(), package_file.file_type.clone())
             }
         };
 
@@ -175,7 +186,7 @@ impl PackageContentView {
             .deserialized_files
             .insert(package_file_idx.to_string(), Rc::clone(&view));
 
-        Ok(view)
+        view
     }
 
     pub fn clear(&mut self) {
@@ -187,7 +198,7 @@ impl PackageContentView {
 struct PackageFiles {
     version: PackageVersion,
     package_file_infos: BTreeMap<String, PackageFile>,
-    deserialized_files: HashMap<String, Rc<FileView>>,
+    deserialized_files: HashMap<String, Rc<FileViewType>>,
 }
 
 impl PackageFiles {

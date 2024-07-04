@@ -23,7 +23,7 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             let app = Bg3Ui::open(path);
-            Box::<Bg3Ui>::new(app)
+            Ok(Box::<Bg3Ui>::new(app))
         }),
     )
 }

@@ -312,8 +312,8 @@ impl LSFReader {
         Ok(uncompressed)
     }
 
-    fn read_headers(&mut self, mut stream: &mut Cursor<&[u8]>) -> Result<(), String> {
-        let magic: LSFMagic = bincode::deserialize_from(&mut stream)
+    fn read_headers(&mut self, stream: &mut Cursor<&[u8]>) -> Result<(), String> {
+        let magic: LSFMagic = bincode::deserialize_from(stream.by_ref())
             .map_err(|e| format!("could not deserialize LSF magic number: {e}"))?;
         if magic.magic != LSFMagic::LSOF_SIGNATURE {
             let error_txt = format!(
@@ -401,7 +401,7 @@ impl LSFReader {
         Ok(names)
     }
 
-    fn read_nodes<T>(&self, mut stream: &mut Cursor<&[u8]>) -> Result<Vec<LSFNodeInfo>, String>
+    fn read_nodes<T>(&self, stream: &mut Cursor<&[u8]>) -> Result<Vec<LSFNodeInfo>, String>
     where
         T: DeserializeOwned + Into<LSFNodeInfo>,
     {
@@ -419,7 +419,7 @@ impl LSFReader {
         let mut node_infos = Vec::with_capacity(deserialize_count);
 
         while stream.position() < stream_len {
-            let item: T = bincode::deserialize_from(&mut stream)
+            let item: T = bincode::deserialize_from(stream.by_ref())
                 .map_err(|e| format!("failed to read LSFNodeEntry bytes: {e}"))?;
             let resolved = item.into();
             node_infos.push(resolved);
@@ -430,7 +430,7 @@ impl LSFReader {
 
     fn read_attributes_v3(
         &self,
-        mut stream: &mut Cursor<&[u8]>,
+        stream: &mut Cursor<&[u8]>,
     ) -> Result<Vec<LSFAttributeInfo>, String> {
         let stream_len = stream
             .seek(SeekFrom::End(0))
@@ -442,7 +442,7 @@ impl LSFReader {
 
         let mut attributes = vec![];
         while stream.position() < stream_len {
-            let item: LSFAttributeEntryV3 = bincode::deserialize_from(&mut stream)
+            let item: LSFAttributeEntryV3 = bincode::deserialize_from(stream.by_ref())
                 .map_err(|e| format!("failed to read LSFAttributeEntryV3 bytes: {e}"))?;
             attributes.push(item.into());
         }
@@ -452,7 +452,7 @@ impl LSFReader {
 
     fn read_attributes_v2(
         &self,
-        mut stream: &mut Cursor<&[u8]>,
+        stream: &mut Cursor<&[u8]>,
     ) -> Result<Vec<LSFAttributeInfo>, String> {
         let stream_len = stream
             .seek(SeekFrom::End(0))
@@ -469,7 +469,7 @@ impl LSFReader {
         let mut attributes: Vec<LSFAttributeInfo> = vec![];
 
         while stream.position() < stream_len {
-            let attribute: LSFAttributeEntryV2 = bincode::deserialize_from(&mut stream)
+            let attribute: LSFAttributeEntryV2 = bincode::deserialize_from(stream.by_ref())
                 .map_err(|e| format!("failed to read LSFAttributeEntryV2 bytes: {e}"))?;
 
             let resolved = LSFAttributeInfo {

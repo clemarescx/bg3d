@@ -8,7 +8,7 @@ edition.workspace = true
 bincode = "1.3.3"
 flate2 = "1.0.30"
 lz4_flex = "0.11.3"
-serde = { version = "1.0.203", features = ["derive"] }
+serde = { version = "1.0.204", features = ["derive"] }
 serde-big-array = "0.5.1"
-uuid = { version = "1.9.1", features = ["serde"] }
-zstd = "0.13.1"
+uuid = { version = "1.10.0", features = ["serde"] }
+zstd = "0.13.2"

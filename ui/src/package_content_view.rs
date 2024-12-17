@@ -70,7 +70,7 @@ impl PackageContentView {
 
         ui.label("files:");
         for (name, pf) in self.package_files.package_file_infos.iter() {
-            let filename = RichText::new(&format!("[{}] {name:?}", pf.pfi.archive_part))
+            let filename = RichText::new(format!("[{}] {name:?}", pf.pfi.archive_part))
                 .color(Color32::LIGHT_GREEN);
 
             ui.selectable_value(&mut self.selected_packedfile, Some(name.clone()), filename);

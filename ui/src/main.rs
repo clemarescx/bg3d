@@ -1,13 +1,12 @@
 mod file_view;
 mod package_content_view;
 
-use std::{cell::Cell, path::PathBuf};
-
 use eframe::{run_native, App, NativeOptions};
-use egui::{CentralPanel, ScrollArea, SidePanel, TopBottomPanel};
+use egui::{CentralPanel, Context, ScrollArea, SidePanel, TopBottomPanel};
 use egui_file_dialog::FileDialog;
 use file_view::FileView;
 use package_content_view::PackageContentView;
+use std::{cell::Cell, path::PathBuf};
 
 fn main() -> Result<(), eframe::Error> {
     let path = std::env::args().nth(1).as_ref().map(PathBuf::from);
@@ -118,7 +117,7 @@ impl Bg3Ui {
 }
 
 impl App for Bg3Ui {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Drop a .lsv file on the window, or");

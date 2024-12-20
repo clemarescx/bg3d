@@ -95,12 +95,12 @@ impl FileView {
                 if let NodeAttributeValue::Bytes(bytes) = &attr_val.value {
                     ui.horizontal(|ui| {
                         if ui.button("extract").clicked() {
-                            self.file_dialog.select_directory();
+                            self.file_dialog.pick_directory();
                         }
                         ui.label(format!("{attr_name}: binary data ({} bytes)", bytes.len()));
                     });
                     self.file_dialog.update(ctx);
-                    if let Some(path) = self.file_dialog.take_selected() {
+                    if let Some(path) = self.file_dialog.take_picked() {
                         let file_name = format!("{attr_name}.bin");
                         let path = path.join(file_name);
                         let file = File::create(&path).unwrap();

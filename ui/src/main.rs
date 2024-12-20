@@ -122,11 +122,11 @@ impl App for Bg3Ui {
             ui.horizontal(|ui| {
                 ui.label("Drop a .lsv file on the window, or");
                 if ui.button("Open .lsv...").clicked() {
-                    self.file_dialog.select_file();
+                    self.file_dialog.pick_file();
                 }
             });
 
-            if let Some(path) = self.file_dialog.update(ctx).selected() {
+            if let Some(path) = self.file_dialog.update(ctx).picked() {
                 match self.path.take() {
                     FileState::None => {
                         self.path.set(FileState::PendingUnpack(path.to_path_buf()));

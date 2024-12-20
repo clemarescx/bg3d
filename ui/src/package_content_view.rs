@@ -92,12 +92,12 @@ impl PackageContentView {
         if let Some(PackageFile { pfi, .. }) = pf {
             ui.label(pfi.to_string());
             if ui.button("extract").clicked() {
-                self.file_dialog.select_directory();
+                self.file_dialog.pick_directory();
             }
 
             self.file_dialog.update(ctx);
 
-            if let Some(path) = self.file_dialog.take_selected() {
+            if let Some(path) = self.file_dialog.take_picked() {
                 self.reader.extract_file(pfi, Some(path.to_path_buf()))?;
             }
         }

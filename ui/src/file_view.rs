@@ -58,7 +58,7 @@ impl FileView {
                 ScrollArea::vertical()
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
-                        egui::Frame::none().outer_margin(10.0).show(ui, |ui| {
+                        egui::Frame::NONE.outer_margin(10.0).show(ui, |ui| {
                             resource.regions.get_region_nodes().enumerate().for_each(
                                 |(i, node)| {
                                     ui.push_id(i, |ui| self.add_node_body(ui, ctx, node, resource));

@@ -6,7 +6,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 authors = ["Clément Marescaux <cmarescaux@hotmail.com>"]
-edition = "2021"
+edition = "2024"
 
 [workspace.dependencies]
 bg3_lib = { path = "bg3_lib" }

@@ -1,6 +1,7 @@
+use bincode::Decode;
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Decode)]
 pub struct LSPKHeader16 {
     pub version: u32,
     pub file_list_offset: u64,

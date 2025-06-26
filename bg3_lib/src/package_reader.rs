@@ -1,5 +1,5 @@
 use std::fs::DirBuilder;
-use std::io::{prelude::*, BufReader, BufWriter, Cursor, SeekFrom};
+use std::io::{BufReader, BufWriter, Cursor, SeekFrom, prelude::*};
 use std::{
     fs::{File, OpenOptions},
     path::{Path, PathBuf},
@@ -12,7 +12,7 @@ use crate::file_entry::{FileEntry18, SIZE_OF_FILE_ENTRY_18};
 use crate::lsf_reader::{LSFReader, Resource};
 use crate::lspk_header::LSPKHeader16;
 use crate::package_version::PackageVersion;
-use crate::{package::Package, LSPK_SIGNATURE};
+use crate::{LSPK_SIGNATURE, package::Package};
 
 pub struct PackageReader {
     file_name: String,
@@ -83,8 +83,9 @@ impl PackageReader {
 
     fn read_package_v18(&mut self, version: u32) -> Result<Package, String> {
         let mut package = Package::new();
-        let header: LSPKHeader16 = bincode::deserialize_from(&mut self.reader)
-            .map_err(|e| format!("failed to deserialize LSPKHeader16: {e}"))?;
+        let header: LSPKHeader16 =
+            bincode::serde::decode_from_std_read(&mut self.reader, bincode::config::legacy())
+                .map_err(|e| format!("failed to deserialize LSPKHeader16: {e}"))?;
 
         if header.version != version {
             return Err("package version is not v18, deserialization messed up".to_string());
@@ -129,7 +130,10 @@ impl PackageReader {
             .map_err(|e| format!("failed to decompress LZ4 package: {e}"))?;
 
         if uncompressed_list.len() != filebuffer_size {
-            return Err(format!("LZ4 compressor disagrees about the size of file headers; expected {filebuffer_size}, got {}", uncompressed_list.len()));
+            return Err(format!(
+                "LZ4 compressor disagrees about the size of file headers; expected {filebuffer_size}, got {}",
+                uncompressed_list.len()
+            ));
         }
 
         // The following doesn't work, for some reason:
@@ -140,10 +144,11 @@ impl PackageReader {
         let file_entries = uncompressed_list
             .chunks_exact(SIZE_OF_FILE_ENTRY_18)
             .map(|c| {
-                bincode::deserialize::<FileEntry18>(c)
+                bincode::serde::decode_from_slice(c, bincode::config::legacy())
+                    .map(|(r, _)| r)
                     .map_err(|e| format!("failed to deserialize FileEntry18 from binary: {e}"))
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<FileEntry18>, _>>()?;
 
         let files = file_entries
             .into_iter()

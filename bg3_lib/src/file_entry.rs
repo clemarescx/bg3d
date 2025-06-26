@@ -1,7 +1,8 @@
+use bincode::Decode;
 use serde::Deserialize;
 use serde_big_array::BigArray;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Decode)]
 pub struct FileEntry18 {
     #[serde(with = "BigArray")]
     pub name: [u8; 256],

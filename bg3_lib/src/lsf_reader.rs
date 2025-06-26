@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
-use std::io::{prelude::*, Cursor, SeekFrom};
+use std::io::{BufReader, Cursor, SeekFrom, prelude::*};
 
-use serde::{de::DeserializeOwned, Deserialize};
+use bincode::Decode;
+use serde::{Deserialize, de::DeserializeOwned};
 
 use crate::abstract_file_info::CompressionMethod;
 use crate::bin_utils::{self, ReadExt};
@@ -251,8 +252,8 @@ impl LSFReader {
             if let Some(next_attribute_idx) = attribute.next_attribute_index {
                 attribute = self.attributes.get(next_attribute_idx).ok_or_else(|| {
                     format!(
-                    "failed getting LSFAttributeInfo at next_attribute_idx {next_attribute_idx}"
-                )
+                        "failed getting LSFAttributeInfo at next_attribute_idx {next_attribute_idx}"
+                    )
                 })?;
             } else {
                 break;
@@ -313,8 +314,9 @@ impl LSFReader {
     }
 
     fn read_headers(&mut self, stream: &mut Cursor<&[u8]>) -> Result<(), String> {
-        let magic: LSFMagic = bincode::deserialize_from(stream.by_ref())
-            .map_err(|e| format!("could not deserialize LSF magic number: {e}"))?;
+        let magic: LSFMagic =
+            bincode::decode_from_std_read(stream.by_ref(), bincode::config::legacy())
+                .map_err(|e| format!("could not deserialize LSF magic number: {e}"))?;
         if magic.magic != LSFMagic::LSOF_SIGNATURE {
             let error_txt = format!(
                 "invalid LSF signature; expected {:#x}, got {:#x}",
@@ -362,7 +364,7 @@ impl LSFReader {
             ));
         }
 
-        self.metadata = bincode::deserialize_from(stream)
+        self.metadata = bincode::decode_from_std_read(stream, bincode::config::legacy())
             .map_err(|e| format!("failed to read LSFMetadata V6: {e}"))?;
         Ok(())
     }
@@ -419,7 +421,8 @@ impl LSFReader {
         let mut node_infos = Vec::with_capacity(deserialize_count);
 
         while stream.position() < stream_len {
-            let item: T = bincode::deserialize_from(stream.by_ref())
+            let reader = BufReader::new(&mut *stream);
+            let item: T = bincode::serde::decode_from_reader(reader, bincode::config::legacy())
                 .map_err(|e| format!("failed to read LSFNodeEntry bytes: {e}"))?;
             let resolved = item.into();
             node_infos.push(resolved);
@@ -442,8 +445,9 @@ impl LSFReader {
 
         let mut attributes = vec![];
         while stream.position() < stream_len {
-            let item: LSFAttributeEntryV3 = bincode::deserialize_from(stream.by_ref())
-                .map_err(|e| format!("failed to read LSFAttributeEntryV3 bytes: {e}"))?;
+            let item: LSFAttributeEntryV3 =
+                bincode::decode_from_std_read(stream.by_ref(), bincode::config::legacy())
+                    .map_err(|e| format!("failed to read LSFAttributeEntryV3 bytes: {e}"))?;
             attributes.push(item.into());
         }
 
@@ -469,8 +473,9 @@ impl LSFReader {
         let mut attributes: Vec<LSFAttributeInfo> = vec![];
 
         while stream.position() < stream_len {
-            let attribute: LSFAttributeEntryV2 = bincode::deserialize_from(stream.by_ref())
-                .map_err(|e| format!("failed to read LSFAttributeEntryV2 bytes: {e}"))?;
+            let attribute: LSFAttributeEntryV2 =
+                bincode::decode_from_std_read(stream.by_ref(), bincode::config::legacy())
+                    .map_err(|e| format!("failed to read LSFAttributeEntryV2 bytes: {e}"))?;
 
             let resolved = LSFAttributeInfo {
                 name_index: (attribute.name_hash_table_index >> 16) as i32,
@@ -664,7 +669,7 @@ impl LSFReader {
             _ => {
                 return Err(format!(
                     "read_attribute not inplemented for type id {type_id:?}"
-                ))
+                ));
             }
         };
 
@@ -963,7 +968,7 @@ impl LSFVersion {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Decode)]
 pub struct LSFMetadataV6 {
     strings_uncompressed_size: u32,
     strings_size_on_disk: u32,
@@ -1018,7 +1023,7 @@ impl From<i32> for PackedVersion {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Decode)]
 struct LSFMagic {
     magic: [u8; 4],
     version: u32,
@@ -1178,7 +1183,7 @@ impl From<LSFAttributeEntryV3> for LSFAttributeInfo {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Decode)]
 pub struct LSFAttributeEntryV3 {
     pub name_hash_table_index: u32,
     pub type_and_length: u32,
@@ -1186,7 +1191,7 @@ pub struct LSFAttributeEntryV3 {
     pub offset: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Decode)]
 pub struct LSFAttributeEntryV2 {
     pub name_hash_table_index: u32,
     pub type_and_length: u32,
